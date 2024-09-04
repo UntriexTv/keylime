@@ -122,7 +122,7 @@ case "$ID" in
                 if test "$ID" = centos; then
                     POWERTOOLS="--enablerepo=PowerTools"
                 else
-                    POWERTOOLS="config-manager --set-enabled rhui-codeready-builder-for-rhel-8-x86_64-rhui-source-rpms"
+                    POWERTOOLS="config-manager --set-enabled codeready-builder-for-rhel-8-x86_64-rpms"
                 fi
 
             ;;
