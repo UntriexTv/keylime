@@ -92,7 +92,11 @@ case "$ID" in
             8*|9*)
                 echo "${ID} ${VERSION_ID} selected."
                 PACKAGE_MGR=$(command -v dnf)
-                NEED_EPEL=1
+                if test "$ID" = centos; then
+                    NEED_EPEL=1
+                else
+                    NEED_EPEL=2
+                fi
                 PYTHON_PREIN="python3 python3-devel python3-setuptools python3-pip"
                 PYTHON_DEPS="gcc gcc-c++ openssl-devel python3-yaml python3-requests python3-cryptography wget git python3-tornado python3-zmq python3-gpg python3-psutil"
                 if [ "$(uname -m)" = "x86_64" ]; then
@@ -119,7 +123,7 @@ case "$ID" in
                     POWERTOOLS="--enablerepo=PowerTools"
                 else
                     POWERTOOLS="config-manager --set-enabled rhui-codeready-builder-for-rhel-8-x86_64-rhui-source-rpms"
-                fi 
+                fi
 
             ;;
             *)
@@ -220,6 +224,8 @@ echo
 echo "=================================================================================="
 echo $'\t\t\tInstalling python & crypto libs'
 echo "=================================================================================="
+
+# Epel install for CentOS
 if [[ "$NEED_EPEL" -eq "1" ]] ; then
     $PACKAGE_MGR -y install epel-release
     if [[ $? > 0 ]] ; then
@@ -227,6 +233,26 @@ if [[ "$NEED_EPEL" -eq "1" ]] ; then
         exit 1
     fi
 fi
+
+# Epel install for RHEL
+if [[ "$NEED_EPEL" -eq "2" ]] ; then
+    case "${VERSION_ID}" in
+    8*)
+        subscription-manager repos --enable codeready-builder-for-rhel-8-$(arch)-rpms
+        $PACKAGE_MGR -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    ;;
+    9*)
+        subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms
+        $PACKAGE_MGR -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+    ;;
+    esac
+
+    if [[ $? > 0 ]] ; then
+        echo "ERROR: EPEL package failed to install properly!"
+        exit 1
+    fi
+fi
+
 
 $PACKAGE_MGR install -y $PYTHON_PREIN
 if [[ $? > 0 ]] ; then
