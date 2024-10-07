@@ -3,6 +3,7 @@ SPDX-License-Identifier: Apache-2.0
 Copyright 2024 Red Hat, Inc.
 """
 
+import argparse
 import os
 import pathlib
 import shutil
@@ -62,7 +63,9 @@ def assertDigestsEqual(d1, d2):
     for file in d1_unique:
         unittest.TestCase().assertTrue(file in d2_unique)
         unittest.TestCase().assertEqual(
-            len(d1_unique[file]), len(d2_unique[file]), msg=f"number of files/digests for {file}"
+            len(d1_unique[file]),
+            len(d2_unique[file]),
+            msg=f"number of files/digests for {file}",
         )
 
         for d in d1_unique[file]:
@@ -79,7 +82,10 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
         setup_script = os.path.abspath(os.path.join(HELPER_DIR, "setup-initrd-tests"))
 
         result = subprocess.run(
-            [setup_script, cls.dirpath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+            [setup_script, cls.dirpath],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
         )
         print("STDOUT:", result.stdout.decode("UTF-8"), file=sys.stderr)
         print("STDERR:", result.stderr.decode("UTF-8"), file=sys.stderr)
@@ -158,10 +164,8 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
             )
 
     def test_boot_aggregate(self):
-        default_alg = "sha256"
-        default_aggregate = "0" * algorithms.Hash(default_alg).hexdigest_len()
         test_cases = [
-            {"input": "", "boot_aggregate": default_aggregate, "alg": default_alg},
+            {"input": "", "boot_aggregate": "", "alg": "unknown"},
             {
                 "input": "10 0000000000000000000000000000000000000000 ima 0000000000000000000000000000000000000000 boot_aggregate",
                 "boot_aggregate": "0000000000000000000000000000000000000000",
@@ -174,8 +178,8 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
             },
             {
                 "input": "FOO BAR",
-                "boot_aggregate": default_aggregate,
-                "alg": default_alg,
+                "boot_aggregate": "",
+                "alg": "unknown",
             },
             {
                 "input": "10 8d814e778e1fca7c551276523ac44455da1dc420 ima-ng sha256:0bc72531a41dbecb38557df75af4bc194e441e71dc677c659a1b179ac9b3e6ba boot_aggregate",
@@ -188,7 +192,7 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
             agg_file = os.path.join(tmpdir, "measurements")
             for c in test_cases:
                 alg, aggregate = create_runtime_policy.boot_aggregate_parse(c["input"])
-                self.assertEqual(alg, c["alg"])
+                self.assertEqual(alg, c["alg"], msg=f"alg={alg}, digest={aggregate}")
                 self.assertEqual(aggregate, c["boot_aggregate"])
 
                 # Now parsing it from a file.
@@ -209,8 +213,8 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
         ]
         for line in bad_entries:
             alg, aggregate = create_runtime_policy.boot_aggregate_parse(line)
-            self.assertEqual(alg, default_alg, msg=f"line = {line}")
-            self.assertEqual(aggregate, default_aggregate, msg=f"line = {line}")
+            self.assertEqual(alg, "unknown", msg=f"line = {line}")
+            self.assertEqual(aggregate, "", msg=f"line = {line}")
 
     def test_file_digest(self):
         initrd_file = os.path.join(self.dirpath, "initrd", "initramfs-keylime-fedora-cat.img")
@@ -218,7 +222,11 @@ class CreateRuntimePolicy_Test(unittest.TestCase):
 
         file_path = os.path.join(r.contents(), "usr/bin/foo")
         test_cases = [
-            {"file": file_path, "alg": "sha1", "digest": "a26ce416a048883cd6ca8e890f6b0a62a8031e8a"},
+            {
+                "file": file_path,
+                "alg": "sha1",
+                "digest": "a26ce416a048883cd6ca8e890f6b0a62a8031e8a",
+            },
             {
                 "file": file_path,
                 "alg": "sha384",
@@ -323,19 +331,19 @@ checksum-4 \
         homedir = os.path.join(rootfsdir, "home")
 
         digests = create_runtime_policy.path_digests(homedir)
-        self.assertEqual(len(digests), 1)
+        self.assertEqual(len(digests), 1, msg=f"digests = {digests}")
 
         digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=None)
-        self.assertEqual(len(digests), 1)
+        self.assertEqual(len(digests), 1, msg=f"digests={digests}, dirs_to_exclude=None")
 
         digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=[])
-        self.assertEqual(len(digests), 1)
+        self.assertEqual(len(digests), 1, msg=f"digests = {digests}, dirs_to_exclude=[]")
 
-        digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=[homedir])
-        self.assertEqual(len(digests), 0)
+        digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=["/foobar"])
+        self.assertEqual(len(digests), 0, msg=f"digests = {digests}, dirs_to_exclude=['/foobar']")
 
-        digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=[rootfsdir])
-        self.assertEqual(len(digests), 0)
+        digests = create_runtime_policy.path_digests(homedir, dirs_to_exclude=["/non-existing"])
+        self.assertEqual(len(digests), 1, msg=f"digests = {digests}, dirs_to_exclude=['/non-existing']")
 
     def test_process_exclude_list(self):
         test_cases = [
@@ -454,7 +462,11 @@ foobar.so(.*)?
             },
             {"a": {}, "b": {"file": ["checksum"]}, "expected": {"file": ["checksum"]}},
             {"a": {"file": ["checksum"]}, "b": {}, "expected": {"file": ["checksum"]}},
-            {"a": {"file": ["checksum"]}, "b": {"file": ["checksum"]}, "expected": {"file": ["checksum"]}},
+            {
+                "a": {"file": ["checksum"]},
+                "b": {"file": ["checksum"]},
+                "expected": {"file": ["checksum"]},
+            },
             {
                 "a": {"file": ["checksum-1"]},
                 "b": {"file": ["checksum-2"]},
@@ -463,7 +475,10 @@ foobar.so(.*)?
             {
                 "a": {"file": ["checksum-1", "checksum-2", "checksum-3"]},
                 "b": {"file": ["checksum-2"], "file-2": ["checksum-4"]},
-                "expected": {"file": ["checksum-1", "checksum-2", "checksum-3"], "file-2": ["checksum-4"]},
+                "expected": {
+                    "file": ["checksum-1", "checksum-2", "checksum-3"],
+                    "file-2": ["checksum-4"],
+                },
             },
         ]
         for c in test_cases:
@@ -527,21 +542,28 @@ foobar.so(.*)?
         self.assertFalse(ok)
         self.assertEqual(len(hashes), 0)
 
-    def test_merge_base_policy(self):
+    def test_update_base_policy(self):
         # TODO: add now some actual good cases, to test the more
         # important flow.
         # XXX: Need to clarify whether "verification-keys" is correct
         # being a single string instead of an array of strings.
         test_cases = [
+            # Base policy is an invalid JSON
             {
                 "base-policy": "not-valid-json",
-                "policy": ima.empty_policy(),
                 "expected": None,
             },
+            # Base policy is a valid JSON with a field matching the current
+            # format, but with an invalid content according to current schema
+            {
+                "base-policy": '{"valid": "json", "verification-keys": "invalid"}',
+                "expected": None,
+            },
+            # Base policy is a valid JSON without any matching field against the
+            # current schema
             {
                 "base-policy": '{"valid": "json", "invalid": "policy"}',
-                "policy": ima.empty_policy(),
-                "expected": None,
+                "expected": ima.empty_policy(),
             },
         ]
 
@@ -551,9 +573,217 @@ foobar.so(.*)?
                 with open(base_policy, "w", encoding="UTF-8") as mfile:
                     mfile.write(c["base-policy"])
 
-                policy = create_runtime_policy.merge_base_policy(c["policy"], base_policy)
+                policy = create_runtime_policy.update_base_policy(base_policy)
                 self.assertEqual(policy, c["expected"])
 
         # Try non-existing file.
-        policy = create_runtime_policy.merge_base_policy(ima.empty_policy(), "/some/invalid/non/existing/policy/here")
+        policy = create_runtime_policy.update_base_policy("/some/invalid/non/existing/policy/here")
         self.assertEqual(policy, None)
+
+    def test_get_digest_algorithm_from_hex(self):
+        """Test that the algorithm guessing works as expected"""
+
+        test_cases = [
+            {
+                "digest": "0001020304050607080900010203040506070809",
+                "expected_algorithm": "sha1",
+            },
+            {
+                "digest": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+                "expected_algorithm": "sha256",
+            },
+            {
+                "digest": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+                "expected_algorithm": "sha384",
+            },
+            {
+                "digest": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+                "expected_algorithm": "sha512",
+            },
+            {
+                "digest": "0001020304050607080900",
+                "expected_algorithm": "unknown",
+            },
+        ]
+
+        for case in test_cases:
+            algorithm = create_runtime_policy._get_digest_algorithm_from_hex(  # pylint: disable=protected-access
+                case["digest"]
+            )
+            self.assertEqual(algorithm, case["expected_algorithm"])
+
+    def test_get_digest_algorithm_from_map_list(self):
+        """Test that the algorithm guessing works as expected"""
+
+        test_cases = [
+            {
+                "digests": {"key": ["0001020304050607080900010203040506070809"]},
+                "expected_algorithm": "sha1",
+            },
+            {
+                "digests": {"key": ["000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"]},
+                "expected_algorithm": "sha256",
+            },
+            {
+                "digests": {
+                    "key": [
+                        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f"
+                    ]
+                },
+                "expected_algorithm": "sha384",
+            },
+            {
+                "digests": {
+                    "key": [
+                        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+                    ]
+                },
+                "expected_algorithm": "sha512",
+            },
+            {
+                "digests": {"key": ["0001020304050607080900"]},
+                "expected_algorithm": "unknown",
+            },
+        ]
+
+        for case in test_cases:
+            algorithm = create_runtime_policy._get_digest_algorithm_from_map_list(  # pylint: disable=protected-access
+                case["digests"]
+            )
+            self.assertEqual(algorithm, case["expected_algorithm"])
+
+    def test_rootfs_with_symbolic_links(self):
+        test_cases = [
+            # Test that symlinks and files in the excluded directory are ignored
+            {
+                "dirs": ["root", "root/excluded", "root/included", "root/included/nested_excluded"],
+                "files": ["root/a", "root/included/b", "root/excluded/c", "root/included/nested_excluded/d", "outside"],
+                "symlinks": [
+                    ("root/sa", "root/a"),
+                    ("root/sb", "root/excluded/c"),
+                    ("root/sc", "outside"),
+                    ("root/sd", "root/included/nested_excluded/d"),
+                ],
+                "root": "root",
+                "dirs_to_exclude": ["/excluded", "/included/nested_excluded"],
+                "algorithm": "sha256",
+                "expected_out": {
+                    "/a": ["f86309c6fecb020efe59a73666162b69e43035da434c7c92df293553810e9907"],
+                    "/included/b": ["5b5b4bcb3b77ca3017d9f3ff9424f777389116c70e4b57c88a3ee857182a3d43"],
+                },
+            },
+        ]
+
+        for case in test_cases:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                for d in case["dirs"]:
+                    os.makedirs(os.path.join(tmpdir, d))
+
+                for f in case["files"]:
+                    with open(os.path.join(tmpdir, f), "w", encoding="UTF-8") as fd:
+                        fd.write(f"some content in {f}")
+
+                for symlink, target in case["symlinks"]:
+                    os.symlink(os.path.join(tmpdir, target), os.path.join(tmpdir, symlink))
+
+                digests = create_runtime_policy.path_digests(
+                    os.path.join(tmpdir, case["root"]),
+                    alg=case["algorithm"],
+                    dirs_to_exclude=case["dirs_to_exclude"],
+                )
+
+                self.assertEqual(digests, case["expected_out"])
+
+    def test_digest_algorithm_priority(self):
+        """Test that the priority for the algorithm selection follows the
+        expected source order: --algo option > base policy > allowlist > ima log"""
+
+        test_cases = []
+
+        rootfs = os.path.join(HELPER_DIR, "rootfs")
+        # Prepare test cases
+        for algo in ["sha1", "sha256", "sha384", "sha512"]:
+            base_policy = os.path.join(HELPER_DIR, f"policy-{algo}")
+            allowlist = os.path.join(HELPER_DIR, f"allowlist-{algo}")
+            ima_log = os.path.join(HELPER_DIR, f"ima-log-{algo}")
+
+            # Case where the algorithm from the IMA measurement list should be
+            # kept
+            test_cases.append(
+                {
+                    "algo_opt": [],
+                    "base_policy": [],
+                    "allowlist": [],
+                    "ima_log": ["--use-ima-measurement-list", "--ima-measurement-list", ima_log],
+                    "rootfs": [],
+                    "expected_algo": f"{algo}",
+                    "expected_source": "IMA measurement list",
+                }
+            )
+
+            # Cases where the algorithm from the allowlist should be kept
+            for il in [[], ["--use-ima-measurement-list", "--ima-measurement-list", ima_log]]:
+                for rfs in [[], ["--rootfs", rootfs]]:
+                    test_cases.append(
+                        {
+                            "algo_opt": [],
+                            "base_policy": [],
+                            "allowlist": ["--allowlist", allowlist],
+                            "ima_log": il,
+                            "rootfs": rfs,
+                            "expected_algo": f"{algo}",
+                            "expected_source": "allowlist",
+                        }
+                    )
+
+                    # Cases where the algorithm from the base policy should be kept
+                    for al in [[], ["--allowlist", allowlist]]:
+                        test_cases.append(
+                            {
+                                "algo_opt": [],
+                                "base_policy": ["--base-policy", base_policy],
+                                "allowlist": al,
+                                "ima_log": il,
+                                "rootfs": rfs,
+                                "expected_algo": f"{algo}",
+                                "expected_source": "base policy",
+                            }
+                        )
+
+                        # Cases where the algorithm from the --algo option should be kept
+                        for bp in [[], ["--base-policy", base_policy]]:
+                            test_cases.append(
+                                {
+                                    "algo_opt": ["--algo", algo],
+                                    "base_policy": bp,
+                                    "allowlist": al,
+                                    "ima_log": il,
+                                    "rootfs": ["--rootfs", rootfs],
+                                    "expected_algo": f"{algo}",
+                                    "expected_source": "--algo option",
+                                }
+                            )
+
+        # Create an argument parser
+        parent_parser = argparse.ArgumentParser(add_help=False)
+        main_parser = argparse.ArgumentParser()
+        subparser = main_parser.add_subparsers(title="actions")
+        parser = create_runtime_policy.get_arg_parser(subparser, parent_parser)
+
+        for case in test_cases:
+            cli_args = []
+            # Prepare argument input
+            for k in ["algo_opt", "base_policy", "allowlist", "ima_log", "rootfs"]:
+                cli_args.extend(case.get(k, []))
+
+            args = parser.parse_args(cli_args)
+            expected_algo = case["expected_algo"]
+            expected_source = case["expected_source"]
+
+            with self.assertLogs("policy.create_runtime_policy", level="DEBUG") as logs:
+                _policy = create_runtime_policy.create_runtime_policy(args)
+
+                self.assertIn(
+                    f"DEBUG:policy.create_runtime_policy:Using digest algorithm '{expected_algo}' obtained from the {expected_source}",
+                    logs.output,
+                )
