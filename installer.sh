@@ -22,12 +22,11 @@ MIN_PYCRYPTOGRAPHY_VERSION="2.1.4"
 # default variables
 CENTOS7_TSS_FLAGS=
 NEED_BUILD_TOOLS=0
-NEED_PYTHON_DIR=0
 PYTHON_PIPS=
 TPM2_TOOLS_PKGS=
 NEED_EPEL=0
 POWERTOOLS=
-PYTHON_PEP668=0
+PYTHON_PEP668=0 
 
 # Check to ensure version is at least minversion
 version_checker () {
@@ -320,10 +319,13 @@ if [[ "$STUB" -eq "1" ]] ; then
     pushd $KEYLIME_DIR
     git checkout $KEYLIME_VER
     popd
-else
 # If all else fails, assume they already have Keylime (we're in it!)
     KEYLIME_DIR=`pwd`
 fi
+if [[ -z "$KEYLIME_DIR" ]] ; then
+    KEYLIME_DIR=`pwd`
+fi
+
 
 
 # Sanity check
