@@ -429,7 +429,7 @@ echo "==========================================================================
 echo $'\t\t\t\tInstall Keylime'
 echo "=================================================================================="
 cd $KEYLIME_DIR
-if $PYTHON_PEP668; then
+if [[ "$PYTHON_PEP668" -eq "1" ]] ; then
     python3 -m pip install . -r requirements.txt  --break-system-packages
 else
     python3 -m pip install . -r requirements.txt
